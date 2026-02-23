@@ -68,17 +68,38 @@ class M2AAPRS:
                 break
 
     def send_packet(self, packet: str):
-        for i in range(3):  # Try sending up to 3 times
-            if self.aprsis and self.aprsis.fileno() != -1:
-                try:
-                    self.aprsis.send((packet + "\r\n").encode())
-                    logging.debug(f"Sent packet to APRS-IS: {packet}")
-                    return  # Success, no need to retry
-                except Exception as e:
-                    logging.error(f"Failed to send packet: {e}")
-            else:
-                self.connect()  # Try to reconnect if socket is not valid
-                time.sleep(5)  # Wait before retrying
+        """Send a packet to APRS-IS with auto reconnect + retry on failure."""
+
+        for attempt in range(3):  # Try up to 3 times
+            try:
+                # Check if socket is valid
+                if not self.aprsis or self.aprsis.fileno() == -1:
+                    raise BrokenPipeError("APRS-IS socket is not connected")
+
+                # Try sending
+                self.aprsis.sendall((packet + "\r\n").encode("utf-8"))
+                logging.debug(f"Sent packet to APRS-IS: {packet}")
+                return True
+
+            except (BrokenPipeError, ConnectionResetError, socket.error) as e:
+                logging.error(f"Send failed (attempt {attempt+1}/3): {e}")
+
+                # Try reconnecting
+                if hasattr(self, "connect_aprsis"):
+                    logging.info("Reconnecting to APRS-IS...")
+                    try:
+                        self.connect_aprsis()
+                        logging.info("Reconnect successful.")
+                    except Exception as e2:
+                        logging.error(f"Reconnect failed: {e2}")
+                        time.sleep(1)
+                        continue  # Try again on next loop
+
+                # Short delay before retry
+                time.sleep(1)
+
+        logging.error("Giving up: packet could not be sent after 3 attempts.")
+        return False
 
     def aprsis_manager(self):
         """Background manager that ensures the APRS-IS socket is connected and
