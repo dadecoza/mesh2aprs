@@ -1,32 +1,32 @@
 {
     "mqtt": {
-        "host": "192.168.3.4",
+        "host": "mqtt.meshtastic.org",
         "port": 1883,
-        "username": "",
-        "password": "",
+        "username": "meshdev",
+        "password": "large4cats",
         "topic": "msh/ZA/#"
     },
     "meshtastic": {
         "key": "1PG7OiApB1nwvP+rz05pAQ=="
     },
     "aprs": {
-        "callsign": "ZR1RF-13",
-        "host": "aprs.zr1rf.za.net",
+        "callsign": "N0CALL-14",
+        "host": "rotate.aprs2.net",
         "port": 14580,
         "filter": "filter a/-21.0/16.45/-35.5/33.5"
     },
     "nodes": {
         "c0c31644": {
-            "callsign": "ZS1GFL-15"
+            "callsign": "N0CALL-1"
         },
         "5becd72f": {
-            "callsign": "ZR1RF-15"
+            "callsign": "N0CALL-2"
         },
         "9e7673f0": {
-            "callsign": "ZS1DOV-15"
+            "callsign": "N0CALL-3"
         },
         "d29538f9": {
-            "callsign": "ZS1OSS-14"
+            "callsign": "N0CALL-4"
         }
     },
     "update_interval": 10
