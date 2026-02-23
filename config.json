@@ -1,0 +1,33 @@
+{
+    "mqtt": {
+        "host": "192.168.3.4",
+        "port": 1883,
+        "username": "",
+        "password": "",
+        "topic": "msh/ZA/#"
+    },
+    "meshtastic": {
+        "key": "1PG7OiApB1nwvP+rz05pAQ=="
+    },
+    "aprs": {
+        "callsign": "ZR1RF-13",
+        "host": "aprs.zr1rf.za.net",
+        "port": 14580,
+        "filter": "filter a/-21.0/16.45/-35.5/33.5"
+    },
+    "nodes": {
+        "c0c31644": {
+            "callsign": "ZS1GFL-15"
+        },
+        "5becd72f": {
+            "callsign": "ZR1RF-15"
+        },
+        "9e7673f0": {
+            "callsign": "ZS1DOV-15"
+        },
+        "d29538f9": {
+            "callsign": "ZS1OSS-14"
+        }
+    },
+    "update_interval": 10
+}
