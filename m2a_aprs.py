@@ -45,6 +45,11 @@ class M2AAPRS:
         logging.debug(f"Constructed APRS packet: {packet}")
         self.send_packet(packet)
 
+    def send_status_packet(self, callsign: str, status: str) -> str:
+        packet = f"{callsign}>APRS,TCPIP*:>{status}"
+        logging.debug(f"Constructed APRS status packet: {packet}")
+        self.send_packet(packet)
+
     def connect(self):
         self.aprsis.connect((
             self.config.get("aprs", {}).get("host", "localhost"),
