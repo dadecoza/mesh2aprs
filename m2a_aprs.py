@@ -40,7 +40,7 @@ class M2AAPRS:
         lon_min = (abs(longitude) - lon_deg) * 60
         lon_hem = "E" if longitude >= 0 else "W"
         lon_str = f"{lon_deg:03d}{lon_min:05.2f}{lon_hem}"
-        position = f"!{lat_str}\\{lon_str}a"
+        position = f"!{lat_str}M{lon_str}a"
         packet = f"{callsign}>APRS,TCPIP*:{position}{comment}"
         logging.debug(f"Constructed APRS packet: {packet}")
         self.send_packet(packet)
