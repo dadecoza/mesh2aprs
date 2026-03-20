@@ -11,11 +11,13 @@ conf = Config()
 nodedb = NodeDB()
 
 
-def update_position_on_aprs(callsign: str, data: dict):
+def update_position_on_aprs(node: dict, data: dict):
+    callsign = node.get("callsign", None)
     node_id = data.get("node_id", None)
-    if not node_id:
+    if not node_id or not callsign:
         return
     update_interval = conf.get("update_interval", 10)
+    symbol = node.get("symbol", DEFAULT_SYMBOL)
     seen = time.time() - (update_interval+1)
     lat = data.get("latitude", None)
     lon = data.get("longitude", None)
@@ -24,7 +26,6 @@ def update_position_on_aprs(callsign: str, data: dict):
     if node_info:
         hardware = node_info.get("hw_model", None)
         seen = node_info.get("seen", seen)
-        symbol = node_info.get("symbol", DEFAULT_SYMBOL)
         if hardware:
             comment += f" | {hardware}"
 
@@ -57,14 +58,17 @@ def update_user(callsign: str, data: dict):
 def on_mesh_received(data):
     type = data.get("type", "Unknown")
     node_id = data.get("node_id", "Unknown")
-    callsign = conf.get("nodes", {}).get(node_id, {}).get("callsign", None)
+    node = conf.get("nodes", {}).get(node_id, {})
+    if not node:
+        return
+    callsign = node.get("callsign", None)
     if not callsign:
         return
     if type == "user":
         update_user(callsign, data)
         logging.debug(f"Updated node {node_id} with user data: {data}")
     elif type == "position":
-        update_position_on_aprs(callsign, data)
+        update_position_on_aprs(node, data)
         logging.debug(f"Received position data for node {node_id}: {data}")
 
 
