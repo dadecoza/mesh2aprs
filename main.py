@@ -1,5 +1,6 @@
 import m2a_meshtastic as meshtastic
 import m2a_aprs as aprsis
+from m2a_aprs import DEFAULT_SYMBOL
 from m2a_config import Config
 from m2a_nodedb import NodeDB
 import time
@@ -23,6 +24,7 @@ def update_position_on_aprs(callsign: str, data: dict):
     if node_info:
         hardware = node_info.get("hw_model", None)
         seen = node_info.get("seen", seen)
+        symbol = node_info.get("symbol", DEFAULT_SYMBOL)
         if hardware:
             comment += f" | {hardware}"
 
@@ -31,7 +33,8 @@ def update_position_on_aprs(callsign: str, data: dict):
             callsign=callsign,
             latitude=lat,
             longitude=lon,
-            comment=comment
+            comment=comment,
+            symbol=symbol
         )
         logging.info(f"Sent position for node {node_id} ({callsign}) to APRS-IS")
     nodedb.update_node(node_id, {"seen": time.time()})
