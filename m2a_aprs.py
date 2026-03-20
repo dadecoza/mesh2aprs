@@ -4,6 +4,8 @@ import threading
 from m2a_config import Config
 import time
 
+APRS_DEVICE_ID = "MTOA00"
+
 
 class M2AAPRS:
     def __init__(self):
@@ -31,7 +33,7 @@ class M2AAPRS:
         return hash_val & 0x7fff  # keep only 15 bits
 
     def send_position_packet(self, callsign: str, latitude: float, longitude: float,
-                             comment: str = "") -> str:
+                             comment: str = "", symbol: str = "Ma") -> str:
         lat_deg = int(abs(latitude))
         lat_min = (abs(latitude) - lat_deg) * 60
         lat_hem = "N" if latitude >= 0 else "S"
@@ -40,13 +42,14 @@ class M2AAPRS:
         lon_min = (abs(longitude) - lon_deg) * 60
         lon_hem = "E" if longitude >= 0 else "W"
         lon_str = f"{lon_deg:03d}{lon_min:05.2f}{lon_hem}"
-        position = f"!{lat_str}M{lon_str}a"
-        packet = f"{callsign}>APRS,TCPIP*:{position}{comment}"
+        overlay, icon = symbol[0], symbol[1] if len(symbol) > 1 else "M", "a"
+        position = f"!{lat_str}{overlay}{lon_str}{icon}"
+        packet = f"{callsign}>{APRS_DEVICE_ID},TCPIP*:{position}{comment}"
         logging.debug(f"Constructed APRS packet: {packet}")
         self.send_packet(packet)
 
     def send_status_packet(self, callsign: str, status: str) -> str:
-        packet = f"{callsign}>APRS,TCPIP*:>{status}"
+        packet = f"{callsign}>{APRS_DEVICE_ID},TCPIP*:>{status}"
         logging.debug(f"Constructed APRS status packet: {packet}")
         self.send_packet(packet)
 
