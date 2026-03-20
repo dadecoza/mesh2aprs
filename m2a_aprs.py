@@ -43,7 +43,10 @@ class M2AAPRS:
         lon_min = (abs(longitude) - lon_deg) * 60
         lon_hem = "E" if longitude >= 0 else "W"
         lon_str = f"{lon_deg:03d}{lon_min:05.2f}{lon_hem}"
-        overlay, icon = symbol[0], symbol[1] if len(symbol) > 1 else DEFAULT_SYMBOL[0], DEFAULT_SYMBOL[1]
+        if symbol and len(symbol) > 1:
+            overlay, icon = symbol[0], symbol[1]
+        else:
+            overlay, icon = DEFAULT_SYMBOL[0], DEFAULT_SYMBOL[1]
         position = f"!{lat_str}{overlay}{lon_str}{icon}"
         packet = f"{callsign}>{APRS_DEVICE_ID},TCPIP*:{position}{comment}"
         logging.debug(f"Constructed APRS packet: {packet}")
