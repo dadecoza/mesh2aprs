@@ -43,7 +43,6 @@ class M2AAPRS:
         lon_min = (abs(longitude) - lon_deg) * 60
         lon_hem = "E" if longitude >= 0 else "W"
         lon_str = f"{lon_deg:03d}{lon_min:05.2f}{lon_hem}"
-
         if symbol and len(symbol) == 2:
             table, icon = symbol
         else:

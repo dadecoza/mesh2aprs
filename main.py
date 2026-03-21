@@ -49,18 +49,19 @@ def comment_string(node_id):
     return " ".join(stats)
 
 
-def update_position_on_aprs(node: dict, data: dict):
-    callsign = node.get("callsign", None)
-    node_id = data.get("node_id", None)
+def update_position_on_aprs(callsign: str, node_id: str):
     if not node_id or not callsign:
         return
-    node = data.copy()
-    del node["type"]
-    nodedb.update_node(node_id, node)
+    node_info = nodedb.get_node(node_id)
+    if not node_info:
+        return
+    node = conf.get("nodes", {}).get(node_id, {})
+    if not node:
+        return
     symbol = node.get("symbol", DEFAULT_SYMBOL)
-    lat = data.get("latitude", None)
-    lon = data.get("longitude", None)
-    alt = data.get("altitude", None)
+    lat = node_info.get("latitude", None)
+    lon = node_info.get("longitude", None)
+    alt = node_info.get("altitude", None)
 
     if lat is not None and lon is not None and ok_to_tx(node_id):
         comment = comment_string(node_id)
@@ -90,6 +91,16 @@ def update_user(callsign: str, data: dict):
     nodedb.update_node(node_id, node)
 
 
+def update_position(callsign, data: dict):
+    node_id = data.get("node_id", None)
+    if not node_id:
+        return
+    position = data.copy()
+    del position["type"]
+    nodedb.update_node(node_id, position)
+    update_position_on_aprs(callsign, node_id)
+
+
 def update_telemetry(callsign: str, data: dict):
     node_id = data.get("node_id", None)
     if not node_id:
@@ -97,6 +108,7 @@ def update_telemetry(callsign: str, data: dict):
     telemetry = data.copy()
     del telemetry["type"]
     nodedb.update_node(node_id, telemetry)
+    update_position_on_aprs(callsign, node_id)
 
 
 def on_mesh_received(data):
@@ -112,7 +124,7 @@ def on_mesh_received(data):
         update_user(callsign, data)
         logging.debug(f"Updated node {node_id} with user data: {data}")
     elif type == "position":
-        update_position_on_aprs(node, data)
+        update_position(callsign, data)
         logging.debug(f"Received position data for node {node_id}: {data}")
     elif type == "telemetry":
         update_telemetry(callsign, data)
