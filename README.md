@@ -119,12 +119,14 @@ Each Meshtastic node ID is mapped to an APRS callsign:
 
 ```json
 "nodes": {
-    "c0c31644": { "callsign": "N0CALL-1" }
+    "c0c31644": { "callsign": "N0CALL-1", "symbol": "/>" }
 }
 ```
 
 - **Key** — Meshtastic node ID (hex string)  
-- **Value** — APRS callsign that will be transmitted to APRS‑IS  
+- **Value**
+  - APRS callsign
+  - APRS Symbol (https://www.aprs.org/symbols/symbols-new.txt)   
 
 Only listed nodes will be published.
 
