@@ -32,6 +32,10 @@ def comment_string(node_id):
     sats = node_info.get("sats", 0)
     utl = round(node_info.get("channel_utilization", 0), 3)
     air = round(node_info.get("air_util_tx", 0), 3)
+    hw = node_info.get("hw_model", None)
+
+    if hw:
+        stats.append(f"Hw:{hw}")
     if rssi:
         stats.append(f"RSSI:{rssi}")
     if snr:
