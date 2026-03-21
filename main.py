@@ -116,7 +116,7 @@ def on_mesh_received(data):
         logging.debug(f"Received position data for node {node_id}: {data}")
     elif type == "telemetry":
         update_telemetry(callsign, data)
-        logging.info(f"Received telemetry data for node {node_id}: {data}")
+        logging.debug(f"Received telemetry data for node {node_id}: {data}")
 
 
 mesh = meshtastic.M2AMeshtastic(on_mesh_received)
