@@ -2,6 +2,7 @@ import paho.mqtt.client as mqtt
 import meshtastic.protobuf.mesh_pb2 as mesh_pb2
 import meshtastic.protobuf.mqtt_pb2 as mqtt_pb2
 import meshtastic.protobuf.portnums_pb2 as portnums_pb2
+import meshtastic.protobuf.telemetry_pb2 as telemetry_pb2
 from google.protobuf.message import DecodeError
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
@@ -72,7 +73,7 @@ class M2AMeshtastic:
             "latitude": pos.latitude_i / 1e7,  # Convert from integer to float
             "longitude": pos.longitude_i / 1e7,
             "altitude": pos.altitude,
-            "time": pos.time,
+            "sats": pos.sats_in_view,
             "type": "position"
         }
 
@@ -95,6 +96,21 @@ class M2AMeshtastic:
             "type": "user"
         }
 
+    def decode_telemetry(self, plaintext: bytes) -> dict:
+        telemetry = telemetry_pb2.Telemetry()
+
+        try:
+            telemetry.ParseFromString(plaintext)
+        except DecodeError as e:
+            raise ValueError(f"Error decoding TELEMETRY_APP payload: {e}")
+
+        result = {
+            "type": "telemetry"
+        }
+        for field_desc, value in telemetry.device_metrics.ListFields():
+            result[field_desc.name] = value
+        return result
+
     def on_connect(self, client, userdata, flags, rc):
         if rc == 0:
             logging.info("MQTT connected successfully")
@@ -112,15 +128,26 @@ class M2AMeshtastic:
             decoded = self.decrypt_packet(raw_payload)
             portnum = getattr(decoded.decoded, "portnum", None)
             node_id = format(getattr(decoded, "from", 0), '08x')
+            rx_snr = getattr(decoded, "rx_snr", 0)
+            rx_rssi = getattr(decoded, "rx_rssi", 0)
+            hops = getattr(decoded, "hop_start", 0) - getattr(decoded, "hop_limit", 0)
+            data = {
+                "node_id": node_id,
+                "rx_snr": rx_snr,
+                "rx_rssi": rx_rssi,
+                "hops": hops
+            }
             if portnum == portnums_pb2.POSITION_APP:
                 position_data = self.decode_position(decoded.decoded.payload)
-                data = position_data.copy()
-                data["node_id"] = node_id
+                data.update(position_data.copy())
                 self.on_receive_callback(data)
             elif portnum == portnums_pb2.NODEINFO_APP:
                 user_data = self.decode_user(decoded.decoded.payload)
-                data = user_data.copy()
-                data["node_id"] = node_id
+                data.update(user_data.copy())
+                self.on_receive_callback(data)
+            elif portnum == portnums_pb2.TELEMETRY_APP:
+                telemetry_data = self.decode_telemetry(decoded.decoded.payload)
+                data.update(telemetry_data.copy())
                 self.on_receive_callback(data)
         except DecodeError as e:
             pass

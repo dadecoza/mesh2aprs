@@ -33,22 +33,30 @@ class M2AAPRS:
 
         return hash_val & 0x7fff  # keep only 15 bits
 
-    def send_position_packet(self, callsign: str, latitude: float, longitude: float,
-                             comment: str = "", symbol: str = "") -> str:
+    def send_position_packet(self, callsign: str, latitude: float, longitude: float, altitude: int | None = None, comment: str = "", symbol: str = "") -> str:
         lat_deg = int(abs(latitude))
         lat_min = (abs(latitude) - lat_deg) * 60
         lat_hem = "N" if latitude >= 0 else "S"
         lat_str = f"{lat_deg:02d}{lat_min:05.2f}{lat_hem}"
+
         lon_deg = int(abs(longitude))
         lon_min = (abs(longitude) - lon_deg) * 60
         lon_hem = "E" if longitude >= 0 else "W"
         lon_str = f"{lon_deg:03d}{lon_min:05.2f}{lon_hem}"
-        if symbol and len(symbol) > 1:
-            overlay, icon = symbol[0], symbol[1]
+
+        if symbol and len(symbol) == 2:
+            table, icon = symbol
         else:
-            overlay, icon = DEFAULT_SYMBOL[0], DEFAULT_SYMBOL[1]
-        position = f"!{lat_str}{overlay}{lon_str}{icon}"
+            table, icon = DEFAULT_SYMBOL
+
+        position = f"!{lat_str}{table}{lon_str}{icon}"
+
+        if altitude is not None:
+            altitude_ft = int(altitude * 3.28084)
+            comment = f"/A={altitude_ft:06d} {comment}".strip()
+
         packet = f"{callsign}>{APRS_DEVICE_ID},TCPIP*:{position}{comment}"
+
         logging.debug(f"Constructed APRS packet: {packet}")
         self.send_packet(packet)
 
