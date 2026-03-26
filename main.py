@@ -18,7 +18,8 @@ def ok_to_tx(node_id):
     update_interval = conf.get("update_interval", 10)
     last_tx = node_info.get("last_tx", time.time() - (update_interval+1))
     txok = last_tx < time.time() - update_interval
-    nodedb.update_node(node_id, {"last_tx": time.time()})
+    if txok:
+        nodedb.update_node(node_id, {"last_tx": time.time()})
     return txok
 
 
