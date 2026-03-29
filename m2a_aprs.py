@@ -1,6 +1,7 @@
 import socket
 import logging
 import threading
+from datetime import datetime, timezone
 from m2a_config import Config
 import time
 
@@ -33,16 +34,23 @@ class M2AAPRS:
 
         return hash_val & 0x7fff  # keep only 15 bits
 
-    def send_position_packet(self, callsign: str, latitude: float, longitude: float, altitude: int | None = None, comment: str = "", symbol: str = "") -> str:
-        lat_deg = int(abs(latitude))
-        lat_min = (abs(latitude) - lat_deg) * 60
-        lat_hem = "N" if latitude >= 0 else "S"
-        lat_str = f"{lat_deg:02d}{lat_min:05.2f}{lat_hem}"
+    def lat_str(self, degrees):
+        deg = int(abs(degrees))
+        min = (abs(degrees) - deg) * 60
+        hem = "N" if degrees >= 0 else "S"
+        lat_str = f"{deg:02d}{min:05.2f}{hem}"
+        return lat_str
 
-        lon_deg = int(abs(longitude))
-        lon_min = (abs(longitude) - lon_deg) * 60
-        lon_hem = "E" if longitude >= 0 else "W"
-        lon_str = f"{lon_deg:03d}{lon_min:05.2f}{lon_hem}"
+    def lon_str(self, degrees):
+        deg = int(abs(degrees))
+        min = (abs(degrees) - deg) * 60
+        hem = "E" if degrees >= 0 else "W"
+        lat_str = f"{deg:03d}{min:05.2f}{hem}"
+        return lat_str
+
+    def send_position_packet(self, callsign: str, latitude: float, longitude: float, altitude: int | None = None, comment: str = "", symbol: str = "") -> str:
+        lat_str = self.lat_str(latitude)
+        lon_str = self.lon_str(longitude)
         if symbol and len(symbol) == 2:
             table, icon = symbol
         else:
@@ -58,6 +66,52 @@ class M2AAPRS:
 
         logging.debug(f"Constructed APRS packet: {packet}")
         self.send_packet(packet)
+
+    def send_weather_packet(
+        self,
+        callsign: str,
+        latitude: float,
+        longitude: float,
+        temperature_c: float,
+        humidity: float,
+        pressure_hpa: float,
+        comment: str = "",
+        symbol: str = ""
+    ) -> str:
+
+        lat_str = self.lat_str(latitude)
+        lon_str = self.lon_str(longitude)
+
+        if symbol and len(symbol) == 2:
+            table, icon = symbol
+        else:
+            table, icon = DEFAULT_SYMBOL
+
+        # --- Timestamp (UTC, APRS format) ---
+        now = datetime.now(timezone.utc)
+        timestamp = now.strftime("%d%H%Mz")
+
+        # --- Weather conversions ---
+        temp_f = int(round((temperature_c * 9/5) + 32))
+        temp_str = f"{temp_f:03d}"
+
+        hum_str = f"{int(round(humidity)):02d}"
+
+        pres = int(round(pressure_hpa * 10))
+        pres_str = f"{pres:05d}"
+
+        # --- Wind placeholder (required for compatibility) ---
+        wind = "000/000g000"
+
+        # --- Build weather position ---
+        position = f"@{timestamp}{lat_str}{table}{lon_str}_{wind}t{temp_str}h{hum_str}b{pres_str}"
+
+        packet = f"{callsign}>{APRS_DEVICE_ID},TCPIP*:{position}{comment}"
+
+        logging.debug(f"Constructed APRS weather packet: {packet}")
+        self.send_packet(packet)
+
+        return packet
 
     def send_status_packet(self, callsign: str, status: str) -> str:
         packet = f"{callsign}>{APRS_DEVICE_ID},TCPIP*:>{status}"

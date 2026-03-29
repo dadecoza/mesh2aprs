@@ -67,8 +67,23 @@ def update_position_on_aprs(callsign: str, node_id: str):
     lat = node_info.get("latitude", None)
     lon = node_info.get("longitude", None)
     alt = node_info.get("altitude", None)
+    temperature_c = node_info.get("temperature", None)
+    humidity = node_info.get("relative_humidity", None)
+    pressure_hpa = node_info.get("barometric_pressure", None)
 
-    if lat is not None and lon is not None and ok_to_tx(node_id):
+    if lat is not None and lon is not None and temperature_c and humidity and pressure_hpa and ok_to_tx(node_id):
+        comment = comment_string(node_id)
+        aprs.send_weather_packet(
+            callsign=callsign,
+            latitude=lat,
+            longitude=lon,
+            temperature_c=temperature_c,
+            humidity=humidity,
+            pressure_hpa=pressure_hpa,
+            comment=comment,
+            symbol=symbol
+        )
+    elif lat is not None and lon is not None and ok_to_tx(node_id):
         comment = comment_string(node_id)
         aprs.send_position_packet(
             callsign=callsign,

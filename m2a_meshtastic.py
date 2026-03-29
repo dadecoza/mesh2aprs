@@ -109,6 +109,9 @@ class M2AMeshtastic:
         }
         for field_desc, value in telemetry.device_metrics.ListFields():
             result[field_desc.name] = value
+
+        for field_desc, value in telemetry.environment_metrics.ListFields():
+            result[field_desc.name] = value
         return result
 
     def on_connect(self, client, userdata, flags, rc):
