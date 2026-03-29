@@ -83,6 +83,7 @@ def update_position_on_aprs(callsign: str, node_id: str):
             comment=comment,
             symbol=symbol
         )
+        logging.info(f"Sent position and weather telemetry for node {node_id} ({callsign}) to APRS-IS")
     elif lat is not None and lon is not None and ok_to_tx(node_id):
         comment = comment_string(node_id)
         aprs.send_position_packet(
