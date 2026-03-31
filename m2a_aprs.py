@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from m2a_config import Config
 import time
 
-APRS_DEVICE_ID = "MTOA00"
+APRS_DEVICE_ID = "APM2A0"
 DEFAULT_SYMBOL = "Ma"
 
 
