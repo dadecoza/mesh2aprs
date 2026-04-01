@@ -23,7 +23,25 @@ def ok_to_tx(node_id):
     return txok
 
 
-def comment_string(node_id):
+def format_uptime(seconds: int) -> str:
+    days, rem = divmod(seconds, 86400)
+    hours, rem = divmod(rem, 3600)
+    minutes, secs = divmod(rem, 60)
+
+    parts = []
+    if days:
+        parts.append(f"{days}d")
+    if hours:
+        parts.append(f"{hours}h")
+    if minutes:
+        parts.append(f"{minutes}m")
+    if secs or not parts:  # show seconds if everything else is zero
+        parts.append(f"{secs}s")
+
+    return "".join(parts)
+
+
+def comment_string(node_id) -> str:
     node_info = nodedb.get_node(node_id)
     stats = []
     rssi = round(node_info.get("rx_rssi", 0), 2)
@@ -34,6 +52,7 @@ def comment_string(node_id):
     utl = round(node_info.get("channel_utilization", 0), 3)
     air = round(node_info.get("air_util_tx", 0), 3)
     hw = node_info.get("hw_model", None)
+    up = node_info.get("uptime_seconds", None)
 
     if hw:
         stats.append(f"Hw:{hw}")
@@ -51,6 +70,8 @@ def comment_string(node_id):
         stats.append(f"Air:{air}%")
     if utl:
         stats.append(f"Utl:{utl}%")
+    if up:
+        stats.append(f"Up:{format_uptime(up)}")
     return " ".join(stats)
 
 
@@ -73,6 +94,8 @@ def update_position_on_aprs(callsign: str, node_id: str):
 
     if lat is not None and lon is not None and temperature_c and humidity and pressure_hpa and ok_to_tx(node_id):
         comment = comment_string(node_id)
+        if alt:
+            comment += f" Alt:{alt}m"
         aprs.send_weather_packet(
             callsign=callsign,
             latitude=lat,

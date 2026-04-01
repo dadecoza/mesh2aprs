@@ -101,7 +101,7 @@ class M2AAPRS:
         pres_str = f"{pres:05d}"
 
         # --- Wind placeholder (required for compatibility) ---
-        wind = "000/000g000"
+        wind = ".../..."  # No wind data, but APRS weather format requires it
 
         # --- Build weather position ---
         position = f"@{timestamp}{lat_str}{table}{lon_str}_{wind}t{temp_str}h{hum_str}b{pres_str}"
