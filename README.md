@@ -35,7 +35,7 @@ pip3 install -r requirements.txt
 Edit the configuration file:
 
 ```bash
-ano config.json
+nano config.json
 ```
 
 Below is a complete example configuration file:
