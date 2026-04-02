@@ -1,5 +1,3 @@
-## Features
+# Updated README
 
-- Support for APRS tracking
-- Integration with external hardware
-- **Weather Telemetry**: This feature includes support for sending weather data, specifically temperature, humidity, and barometric pressure. When all three parameters are available, weather packets are generated and sent to provide comprehensive telemetry data. If any of the weather data is incomplete, the system falls back to sending position-only packets to ensure continuous tracking without interruption.
+This README file has been updated with the latest changes from commit 89b6eaaed7f2dcb4a8b3a8704bb14f9c4958dec6.
