@@ -4,7 +4,7 @@ Publish Meshtastic node positions to APRS‑IS
 ![aprs.fi](mesh2aprs.jpg)
 
 ## Overview
-**mesh2aprs** is a lightweight Python service that subscribes to Meshtastic MQTT telemetry and publishes position reports to the APRS‑IS network.  
+**mesh2aprs** is a lightweight Python service that subscribes to a Meshtastic MQTT topic and publishes position reports and telemetry to the APRS‑IS network.  
 This enables Meshtastic nodes to appear on APRS map services such as *aprs.fi* using their assigned callsigns.
 
 ---
