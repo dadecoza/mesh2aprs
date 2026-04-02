@@ -1,5 +1,5 @@
 # mesh2aprs
-Publish Meshtastic node positions to APRS‑IS
+Publish Meshtastic node positions and telemetry to APRS‑IS
 
 ![aprs.fi](mesh2aprs.jpg)
 
