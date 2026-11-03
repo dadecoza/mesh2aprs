@@ -6,6 +6,7 @@ import hmac
 import json
 import logging
 import math
+import re
 import struct
 import time
 from collections import OrderedDict
@@ -14,6 +15,27 @@ import paho.mqtt.client as mqtt
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
 from m2a_config import Config, node_type
+
+
+WARDRIVING_CHANNEL = "#wardriving"
+WARDRIVING_KEY = hashlib.sha256(WARDRIVING_CHANNEL.encode("utf-8")).digest()[:16]
+MESHMAPPER_PATTERN = re.compile(
+    r"MM:([A-Za-z0-9_-]{10}):([+-]?\d+(?:\.\d+)?),([+-]?\d+(?:\.\d+)?)",
+    re.ASCII,
+)
+
+
+def decode_meshmapper(body):
+    """Decode broadcast coordinates; the wire tag is opaque, not a node ID."""
+    match = MESHMAPPER_PATTERN.fullmatch(body)
+    if match is None:
+        raise ValueError("Not a MeshMapper coordinate message")
+    tag, lat, lon = match.groups()
+    latitude, longitude = float(lat), float(lon)
+    if not (-90 <= latitude <= 90 and -180 <= longitude <= 180):
+        raise ValueError("Coordinates outside geographic bounds")
+    return {"type": "position", "latitude": latitude, "longitude": longitude,
+            "meshmapper_tag": tag}
 
 
 def decode_telemetry(body):
@@ -70,6 +92,8 @@ class M2AMeshCore:
         if len(self.key) != 16:
             raise ValueError("MeshCore channel key must contain 32 hex characters")
         self.channel_hash = hashlib.sha256(self.key).digest()[0]
+        # Keep every candidate: different channels can share a one-byte hash.
+        self.channels = {self.key: self.channel, WARDRIVING_KEY: WARDRIVING_CHANNEL}
         self.max_age = float(settings.get("max_message_age", 300))
         self.future_tolerance = float(settings.get("future_tolerance", 60))
         self.dedupe_seconds = float(settings.get("dedupe_seconds", 300))
@@ -131,15 +155,20 @@ class M2AMeshCore:
         payload = raw[offset + 1 + hops * width:]
         if not 19 <= len(payload) <= 184:
             raise ValueError("Invalid group payload length")
-        if payload[0] != self.channel_hash:
-            return None
         ciphertext = payload[3:]
         if len(ciphertext) % 16:
             raise ValueError("Unaligned group ciphertext")
-        expected = hmac.new(self.key, ciphertext, hashlib.sha256).digest()[:2]
-        if not hmac.compare_digest(payload[1:3], expected):
+        channel = None
+        for key, name in self.channels.items():
+            if payload[0] != hashlib.sha256(key).digest()[0]:
+                continue
+            expected = hmac.new(key, ciphertext, hashlib.sha256).digest()[:2]
+            if hmac.compare_digest(payload[1:3], expected):
+                channel = name
+                break
+        if channel is None:
             return None
-        decryptor = Cipher(algorithms.AES(self.key), modes.ECB()).decryptor()
+        decryptor = Cipher(algorithms.AES(key), modes.ECB()).decryptor()
         plaintext = decryptor.update(ciphertext) + decryptor.finalize()
         if plaintext[4] >> 2 != 0:
             return None  # Only plain channel text, no CLI or signed-text variants.
@@ -147,10 +176,18 @@ class M2AMeshCore:
         text = plaintext[5:].split(b"\0", 1)[0].decode("utf-8")
         sender, sep, body = text.partition(": ")
         node_id = self.senders.get(sender)
-        if not sep or node_id is None or not body.startswith(("#TEL:", "#T:")):
+        if not sep or node_id is None:
             return None
-        return {**decode_telemetry(body), "node_id": node_id,
-                "sender_name": sender, "channel": self.channel,
+        if channel == WARDRIVING_CHANNEL:
+            if not body.startswith("MM:") or body.count(":") == 1:
+                return None  # Privacy-mode tokens carry no location.
+            position = decode_meshmapper(body)
+        else:
+            if not body.startswith(("#TEL:", "#T:")):
+                return None
+            position = decode_telemetry(body)
+        return {**position, "node_id": node_id,
+                "sender_name": sender, "channel": channel,
                 "timestamp": timestamp, "hops": hops,
                 "packet_hash": hashlib.sha256(payload).hexdigest()}
 
@@ -175,7 +212,7 @@ class M2AMeshCore:
             if age > self.max_age or age < -self.future_tolerance:
                 return
             # The same encrypted body arrives through different RF paths/observers.
-            identity = (data["node_id"], self.channel, data["packet_hash"])
+            identity = (data["node_id"], data["channel"], data["packet_hash"])
             monotonic_now = time.monotonic()
             while self.seen and next(iter(self.seen.values())) <= monotonic_now - self.dedupe_seconds:
                 self.seen.popitem(last=False)

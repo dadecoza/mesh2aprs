@@ -17,7 +17,7 @@ from meshtastic.protobuf import mesh_pb2, mqtt_pb2, portnums_pb2
 import main
 from m2a_aprs import M2AAPRS
 from m2a_config import Config, node_type
-from m2a_meshcore import M2AMeshCore, decode_telemetry
+from m2a_meshcore import M2AMeshCore, WARDRIVING_KEY, decode_meshmapper, decode_telemetry
 from m2a_meshtastic import M2AMeshtastic
 from m2a_nodedb import NodeDB
 
@@ -26,6 +26,7 @@ KEY = bytes.fromhex("00112233445566778899aabbccddeeff")
 PUBLIC_KEY = "12" * 32
 NOW = 1804140000
 BODY = "#TEL:68yUiAsPFKf9/gE"
+MAPPER_BODY = "MM:n0HdaRT5XQ:-33.87897,18.81556"
 
 
 def config():
@@ -62,6 +63,26 @@ def message(raw=None, retain=False, **fields):
 
 
 class TelemetryTests(unittest.TestCase):
+    def test_meshmapper_coordinates(self):
+        self.assertEqual(decode_meshmapper(MAPPER_BODY), {
+            "type": "position", "latitude": -33.87897, "longitude": 18.81556,
+            "meshmapper_tag": "n0HdaRT5XQ",
+        })
+        self.assertEqual(decode_meshmapper("MM:01234_678-:0,0")["latitude"], 0)
+        self.assertEqual(decode_meshmapper("MM:0123456789:-90,180")["longitude"], 180)
+
+    def test_meshmapper_invalid_or_private_messages(self):
+        for body in (
+            "MM:n0HdaRT5XQ", "MM:short:1,2", "MM:01234567890:1,2",
+            "MM:012345678!:1,2", "MM:n0HdaRT5XQ:nan,2",
+            "MM:n0HdaRT5XQ:1,inf", "MM:n0HdaRT5XQ:90.00001,2",
+            "MM:n0HdaRT5XQ:1,-180.00001", "MM:n0HdaRT5XQ:1,2,3",
+            "MM:n0HdaRT5XQ:1,2:extra", "MM:n0HdaRT5XQ:1,2\n",
+            "MM:n0HdaRT5XQ:١,٢", "MM:n0HdaRT5XQ:,2",
+        ):
+            with self.subTest(body=body), self.assertRaises(ValueError):
+                decode_meshmapper(body)
+
     def test_documented_team_vector(self):
         data = decode_telemetry(BODY)
         self.assertEqual(data["latitude"], -33.8914168)
@@ -145,6 +166,54 @@ class ReceiverTests(unittest.TestCase):
                     self.assertEqual(data["hops"], 2)
                     self.assertEqual(data["node_id"], PUBLIC_KEY)
                     self.assertEqual(data["channel"], "team-sar")
+
+    def test_meshmapper_uses_wardriving_key_without_config_changes(self):
+        self.assertEqual(WARDRIVING_KEY, hashlib.sha256(b"#wardriving").digest()[:16])
+        for route in range(4):
+            with self.subTest(route=route):
+                data = self.receiver.decode_packet(packet(
+                    body=MAPPER_BODY, key=WARDRIVING_KEY, route=route))
+                self.assertEqual(data["latitude"], -33.87897)
+                self.assertEqual(data["longitude"], 18.81556)
+                self.assertEqual(data["channel"], "#wardriving")
+                self.assertEqual(data["node_id"], PUBLIC_KEY)
+
+    def test_meshmapper_channel_separation_and_unknown_senders(self):
+        for raw in (packet(body=MAPPER_BODY), packet(key=WARDRIVING_KEY),
+                    packet(body=MAPPER_BODY, key=WARDRIVING_KEY, sender="Unknown"),
+                    packet(body="MM:n0HdaRT5XQ", key=WARDRIVING_KEY)):
+            self.receiver.on_message(None, None, message(raw))
+        self.callback.assert_not_called()
+        # The configured TEAM channel continues to work.
+        self.receiver.on_message(None, None, message())
+        self.callback.assert_called_once()
+
+    def test_meshmapper_mac_collision_candidates(self):
+        target_hash = hashlib.sha256(WARDRIVING_KEY).digest()[0]
+        collision = next(i.to_bytes(16, "big") for i in range(65536)
+                         if hashlib.sha256(i.to_bytes(16, "big")).digest()[0] == target_hash)
+        cfg = copy.deepcopy(self.cfg)
+        cfg["meshcore"]["key"] = collision.hex()
+        receiver = M2AMeshCore(self.callback, cfg)
+        self.addCleanup(receiver.close)
+        self.assertEqual(receiver.decode_packet(packet(
+            body=MAPPER_BODY, key=WARDRIVING_KEY))["channel"], "#wardriving")
+        self.assertEqual(receiver.decode_packet(packet(key=collision))["channel"], "team-sar")
+
+    def test_meshmapper_freshness_deduplication_and_invalid_input(self):
+        for msg in (message(packet(body=MAPPER_BODY, key=WARDRIVING_KEY, timestamp=NOW-301)),
+                    message(packet(body=MAPPER_BODY, key=WARDRIVING_KEY, timestamp=NOW+61)),
+                    message(packet(body=MAPPER_BODY, key=WARDRIVING_KEY), retain=True),
+                    message(packet(body="MM:n0HdaRT5XQ:200,2", key=WARDRIVING_KEY))):
+            self.receiver.on_message(None, None, msg)
+        self.callback.assert_not_called()
+        self.receiver.on_message(None, None, message(packet(body=MAPPER_BODY, key=WARDRIVING_KEY)))
+        self.receiver.on_message(None, None, message(packet(
+            body=MAPPER_BODY, key=WARDRIVING_KEY, path=b"\xab\xcd"), origin_id="other"))
+        self.callback.assert_called_once()
+        self.receiver.on_message(None, None, message(packet(
+            body=MAPPER_BODY, key=WARDRIVING_KEY, timestamp=NOW+1)))
+        self.assertEqual(self.callback.call_count, 2)
 
     def test_decodes_rx_and_uses_configured_identity(self):
         self.receiver.on_message(None, None, message())
@@ -249,6 +318,16 @@ class GatewayTests(unittest.TestCase):
         self.aprs.send_packet.assert_not_called()
         self.assertEqual(self.db.nodes, {})
 
+    def test_meshmapper_mqtt_to_aprs_and_shared_rate_limit(self):
+        with patch("m2a_meshcore.mqtt.Client"), patch("time.time", return_value=NOW):
+            receiver = M2AMeshCore(partial(main.on_mesh_received, mesh_type="meshcore"), self.cfg)
+            receiver.on_message(None, None, message(packet(body=MAPPER_BODY, key=WARDRIVING_KEY)))
+            # A TEAM update for the same node obeys the same APRS rate limit.
+            receiver.on_message(None, None, message())
+            receiver.close()
+        self.aprs.send_packet.assert_called_once_with(
+            "ZR1RF-16>APM2A0,TCPIP*:!3352.74S/01848.93E>RSSI:-93.0 SNR:4.5")
+
     def test_unknown_sender_is_rejected(self):
         main.on_mesh_received({**decode_telemetry(BODY), "node_id": "unknown"}, "meshcore")
         self.aprs.send_packet.assert_not_called()
@@ -303,6 +382,14 @@ class GatewayTests(unittest.TestCase):
         meshcore.close.assert_called_once()
 
     def test_real_mqtt_wire_to_aprs_socket(self):
+        self._mqtt_wire_to_aprs_socket()
+
+    def test_real_meshmapper_mqtt_wire_to_aprs_socket(self):
+        self._mqtt_wire_to_aprs_socket(
+            MAPPER_BODY, WARDRIVING_KEY, "3352.74S/01848.93E>")
+
+    def _mqtt_wire_to_aprs_socket(self, body=BODY, key=KEY,
+                                  expected_position="3353.49S/01833.23E>"):
         """Use real paho and APRS sendall against local sockets, with no RF/APRS publication."""
         listener = socket.socket()
         listener.bind(("127.0.0.1", 0))
@@ -346,7 +433,8 @@ class GatewayTests(unittest.TestCase):
                     self.assertIn(b"meshcore/#", subscribe)
                     conn.sendall(b"\x90\x03" + subscribe[:2] + b"\x00")
                     topic = b"meshcore/CPT/observer/packets"
-                    payload = struct.pack(">H", len(topic)) + topic + message().payload
+                    payload = struct.pack(">H", len(topic)) + topic + message(
+                        packet(body=body, key=key)).payload
                     length, remaining = len(payload), bytearray()
                     while True:
                         byte = length % 128
@@ -372,7 +460,7 @@ class GatewayTests(unittest.TestCase):
             with patch("time.time", return_value=NOW):
                 receiver = M2AMeshCore(partial(main.on_mesh_received, mesh_type="meshcore"), self.cfg)
                 emitted = aprs_rx.recv(1024).decode()
-            self.assertTrue(emitted.startswith("ZR1RF-16>APM2A0,TCPIP*:!3353.49S/01833.23E>"))
+            self.assertTrue(emitted.startswith("ZR1RF-16>APM2A0,TCPIP*:!" + expected_position))
             self.assertTrue(emitted.endswith("\r\n"))
         finally:
             finished.set()

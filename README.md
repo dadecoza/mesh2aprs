@@ -141,6 +141,10 @@ MeshCore uses its own broker settings under `meshcore.mqtt`; the existing top-le
 
 The initial MeshCore mapping uses radio `ZR1RF 📟`, its full public key `ae5dab7415b5246c165ec5223ed0bf5399c47ea36ee9bea33ba572df4861ac20`, and APRS callsign `ZR1RF-16`. Set each node’s `sender_name` to the exact radio name appearing before `": "` in channel messages. It defaults to the configured callsign when omitted. Sender names must be unique among configured MeshCore nodes.
 
+The receiver also monitors the public hashtag channel **`#wardriving`** automatically using `SHA256("#wardriving")[:16]` as its key. No configuration changes are needed. MeshMapper broadcast messages such as `MM:n0HdaRT5XQ:-33.87897,18.81556` are forwarded using the existing `sender_name` → node → APRS mapping. The ten-character wire tag is retained as message metadata; it is not a sender identity. Token-only messages such as `MM:n0HdaRT5XQ` contain no coordinates and are ignored. Coordinates must be finite and geographically valid. Only MeshMapper coordinate messages are accepted on `#wardriving`; TEAM telemetry remains on the configured tracking channel. Both channels share per-node APRS rate limiting.
+
+MeshMapper behavior was checked against its [ping sender](https://github.com/MeshMapper/MeshMapper_Flutter_App/blob/dev/lib/services/ping_service.dart), [wire tag codec](https://github.com/MeshMapper/MeshMapper_Flutter_App/blob/dev/lib/services/meshcore/wire_tag_codec.dart), and [channel key derivation](https://github.com/MeshMapper/MeshMapper_Flutter_App/blob/dev/lib/services/meshcore/crypto_service.dart).
+
 The receiver supports **meshcoretomqtt/LetsMesh packet JSON** containing hex `raw` RF bytes, with optional `direction`, `SNR` and `RSSI`. It authenticates and decrypts v1 group text using the configured shared secret, then decodes TEAM beta6 `#TEL:` and `#T:` position messages and battery voltages. Packet paths may use one-, two-, or three-byte hashes and scoped transport headers. Other packet types, chat messages, status topics and TX echoes are ignored. Decoded-only MQTT JSON and direct-message telemetry are not supported.
 
 The on-air channel hash and MAC select the channel by its secret; its name is a local label. Group text contains a sender name, **no sender public key or signature**. The node key therefore identifies the configured APRS mapping, while `sender_name` resolves incoming telemetry. This is a deliberate name mapping, not proof that a message came from that public key. The MQTT topic key and `origin_id` belong to the receiving observer and must not identify the tracker. Channel members can impersonate names.
@@ -217,7 +221,7 @@ python3 main.py
 python3 -m unittest discover -s tests -v
 ```
 
-Tests cover TEAM vectors, malformed packets, channel authentication, routing, sender mapping, freshness, deduplication, APRS output, startup/shutdown and Meshtastic compatibility. A local MQTT socket fixture exercises real Paho delivery through the real APRS socket writer without publishing to an external service. Importing `main` does not open network connections.
+Tests cover TEAM vectors, MeshMapper coordinates and channel selection, channel-hash collisions, malformed packets, channel authentication, routing, sender mapping, freshness, deduplication, APRS output, startup/shutdown and Meshtastic compatibility. A local MQTT socket fixture exercises real Paho delivery through the real APRS socket writer without publishing to an external service. Importing `main` does not open network connections.
 
 ---
 
