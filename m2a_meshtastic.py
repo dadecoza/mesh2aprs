@@ -22,18 +22,18 @@ class M2AMeshtastic:
         password = self.config.get("mqtt", {}).get("password", None)
         if username and password:
             self.client.username_pw_set(username, password)
+        self.client.on_connect = self.on_connect
+        self.client.on_message = self.on_message
+        self.on_receive_callback = on_receive_callback
         self.client.connect(
             self.config.get("mqtt", {}).get("host", "localhost"),
             self.config.get("mqtt", {}).get("port", 1883)
         )
-        self.client.on_connect = self.on_connect
-        self.client.on_message = self.on_message
-        self.on_receive_callback = on_receive_callback
         self.client.loop_start()
 
-    def __del__(self):
-        self.client.loop_stop()
+    def close(self):
         self.client.disconnect()
+        self.client.loop_stop()
 
     def decrypt_packet(self, packet_bytes: bytes):
         envelope = mqtt_pb2.ServiceEnvelope()

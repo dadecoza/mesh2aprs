@@ -1,14 +1,20 @@
 import m2a_meshtastic as meshtastic
+import m2a_meshcore as meshcore
 import m2a_aprs as aprsis
 from m2a_aprs import DEFAULT_SYMBOL
-from m2a_config import Config
+from m2a_config import Config, node_type
 from m2a_nodedb import NodeDB
 import time
 import logging
+import threading
+from functools import partial
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-conf = Config()
-nodedb = NodeDB()
+# Importing the module is safe for tests and tools: connections start in main().
+conf = None
+nodedb = None
+aprs = None
+receive_lock = threading.Lock()
 
 
 def ok_to_tx(node_id):
@@ -44,9 +50,9 @@ def format_uptime(seconds: int) -> str:
 def comment_string(node_id) -> str:
     node_info = nodedb.get_node(node_id)
     stats = []
-    rssi = round(node_info.get("rx_rssi", 0), 2)
-    snr = round(node_info.get("rx_snr", 0), 2)
-    battery = round(node_info.get("voltage", 0), 2)
+    rssi = round(node_info.get("rx_rssi") or 0, 2)
+    snr = round(node_info.get("rx_snr") or 0, 2)
+    battery = round(node_info.get("voltage") or 0, 2)
     batlvl = node_info.get("battery_level", 0)
     sats = node_info.get("sats", 0)
     utl = round(node_info.get("channel_utilization", 0), 3)
@@ -155,11 +161,19 @@ def update_telemetry(callsign: str, data: dict):
     update_position_on_aprs(callsign, node_id)
 
 
-def on_mesh_received(data):
+def on_mesh_received(data, mesh_type="meshtastic"):
+    # Both MQTT clients run their own thread; serialize DB and APRS operations.
+    with receive_lock:
+        _on_mesh_received(data, mesh_type)
+
+
+def _on_mesh_received(data, mesh_type):
     type = data.get("type", "Unknown")
     node_id = data.get("node_id", "Unknown")
     node = conf.get("nodes", {}).get(node_id, {})
     if not node:
+        return
+    if node_type(node) != mesh_type:
         return
     callsign = node.get("callsign", None)
     if not callsign:
@@ -175,12 +189,28 @@ def on_mesh_received(data):
         logging.debug(f"Received telemetry data for node {node_id}: {data}")
 
 
-mesh = meshtastic.M2AMeshtastic(on_mesh_received)
-aprs = aprsis.M2AAPRS()
-
-if __name__ == "__main__":
+def main():
+    global conf, nodedb, aprs
+    conf = Config()
+    nodedb = NodeDB()
+    types = {node_type(node) for node in conf.get("nodes", {}).values()}
+    receivers = []
+    # APRS must exist before the MQTT loops can deliver their first callback.
+    aprs = aprsis.M2AAPRS()
     try:
+        if "meshtastic" in types:
+            receivers.append(meshtastic.M2AMeshtastic(
+                partial(on_mesh_received, mesh_type="meshtastic")))
+        if "meshcore" in types:
+            receivers.append(meshcore.M2AMeshCore(
+                partial(on_mesh_received, mesh_type="meshcore"), config=conf))
         while True:
             time.sleep(1)
     except KeyboardInterrupt:
         logging.info("Bye.")
+    finally:
+        for receiver in receivers:
+            receiver.close()
+
+if __name__ == "__main__":
+    main()

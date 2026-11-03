@@ -17,17 +17,41 @@
     },
     "nodes": {
         "c0c31644": {
-            "callsign": "N0CALL-1"
+            "callsign": "N0CALL-1",
+            "type": "meshtatic"
         },
         "5becd72f": {
-            "callsign": "N0CALL-2"
+            "callsign": "N0CALL-2",
+            "type": "meshtatic"
         },
         "9e7673f0": {
-            "callsign": "N0CALL-3"
+            "callsign": "N0CALL-3",
+            "type": "meshtatic"
         },
         "d29538f9": {
-            "callsign": "N0CALL-4"
+            "callsign": "N0CALL-4",
+            "type": "meshtatic"
+        },
+        "ae5dab7415b5246c165ec5223ed0bf5399c47ea36ee9bea33ba572df4861ac20": {
+            "type": "meshcore",
+            "callsign": "ZR1RF-16",
+            "sender_name": "ZR1RF 📟",
+            "symbol": "/>"
         }
     },
-    "update_interval": 10
+    "update_interval": 10,
+    "meshcore": {
+        "mqtt": {
+            "host": "mqtt.zr1rf.za.net",
+            "port": 1883,
+            "username": "meshcoreuser",
+            "password": "mctomqtt",
+            "topic": "meshcore/#"
+        },
+        "channel": "team-sar",
+        "key": "REPLACE_WITH_CHANNEL_SHARED_SECRET",
+        "max_message_age": 300,
+        "future_tolerance": 60,
+        "dedupe_seconds": 300
+    }
 }
